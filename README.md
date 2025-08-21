@@ -1,5 +1,143 @@
 # Plex-Trakt-Sync
 
+UPDATE: 
+
+```markdown
+# PlexTraktSync – Oracle Cloud Setup (Ubuntu ARM, Docker)
+
+This setup integrates **Trakt** with Plex using the official [PlexTraktSync](https://github.com/Taxel/PlexTraktSync) project.  
+It covers both **real-time event watching** (via Docker) and **scheduled syncing** (via cron).
+
+---
+
+## 📂 Directory Layout
+```
+
+/opt/plextraktsync
+├── docker-compose.yml      # Watcher service (Docker)
+├── config.json             # Trakt & Plex auth (generated on first run)
+├── sync.sh                 # Script to run manual sync
+├── healthcheck.sh          # Script to check container health
+├── sync.log                # Log of cron-based syncs
+├── healthcheck.log         # Log of hourly container checks
+
+````
+
+---
+
+## 🚀 Installation
+
+1. **Clone the repo**
+   ```bash
+   cd /opt
+   git clone <your-repo-url> plextraktsync
+   cd plextraktsync
+````
+
+2. **Docker Compose Up**
+
+   ```bash
+   docker compose up -d
+   ```
+
+   * Runs `watch` service (`unless-stopped`)
+   * Logs accessible via:
+
+     ```bash
+     docker logs plextraktsync-watch --tail=100 -f
+     ```
+
+3. **Authorize PlexTraktSync**
+
+   ```bash
+   docker exec -it plextraktsync-watch plextraktsync login
+   ```
+
+   Follow the prompts to link Plex + Trakt.
+
+---
+
+## 🕒 Cron Jobs (root)
+
+Installed via:
+
+```bash
+sudo crontab -e
+```
+
+### Schedule:
+
+```cron
+# Every 15 mins → Full sync
+*/15 * * * * /opt/plextraktsync/sync.sh >> /opt/plextraktsync/sync.log 2>&1
+
+# Hourly at :12 → Container healthcheck
+12 * * * * /opt/plextraktsync/healthcheck.sh >> /opt/plextraktsync/healthcheck.log 2>&1
+```
+
+---
+
+## 📜 Scripts
+
+### `sync.sh`
+
+```bash
+#!/bin/bash
+cd /opt/plextraktsync
+docker exec plextraktsync-watch plextraktsync sync
+```
+
+### `healthcheck.sh`
+
+```bash
+#!/bin/bash
+cd /opt/plextraktsync
+docker ps | grep plextraktsync-watch >/dev/null 2>&1
+if [ $? -ne 0 ]; then
+  echo "$(date): Container not running. Restarting..." >> /opt/plextraktsync/healthcheck.log
+  docker compose up -d
+fi
+```
+
+Make scripts executable:
+
+```bash
+chmod +x sync.sh healthcheck.sh
+```
+
+---
+
+## 🔍 Monitoring
+
+* Sync logs:
+
+  ```bash
+  tail -f /opt/plextraktsync/sync.log
+  ```
+
+* Health logs:
+
+  ```bash
+  tail -f /opt/plextraktsync/healthcheck.log
+  ```
+
+* Watcher logs:
+
+  ```bash
+  docker logs plextraktsync-watch --tail=100 -f
+  ```
+
+---
+
+## ✅ Status
+
+* **Watcher** → Docker container, always running.
+* **Sync** → Cron every 15 min.
+* **Healthcheck** → Cron hourly.
+
+This setup is **hands-off**: Plex and Trakt stay in sync without intervention.
+
+
 ![Python Versions][python-versions-badge]
 
 This project adds a two-way-sync between trakt.tv and Plex Media Server. It
@@ -840,3 +978,6 @@ Yes using docker, check [Discussions][discussions] page.
 Check [Discussions][discussions], maybe someone already asked and found the answer.
 
 [discussions]: https://github.com/Taxel/PlexTraktSync/discussions
+
+
+
